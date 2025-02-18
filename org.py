@@ -2,6 +2,7 @@
 
 import argparse
 import orgparse
+from orgparse.node import OrgEnv
 import sys
 import os.path
 import os
@@ -12,7 +13,10 @@ logging.basicConfig()
 log = logging.getLogger('org')
 log.setLevel(logging.INFO)
 
-todos = []
+todo_keys = ['TODO', 'IN-PROGRESS']
+done_keys = ['DONE', 'DEFERRED', 'CANCELLED', 'DELEGATED']
+todos = {}
+env = OrgEnv(todos=todo_keys, dones=done_keys, filename='<string>')
 
 class ToDo(object):
     def __init__(self, headline, scheduled, path, state="TODO"):
@@ -20,19 +24,22 @@ class ToDo(object):
         self.scheduled = scheduled
         self.path = path
         self.state = state
+        self.sig = self.state + self.headline
 
     def __str__(self):
-        return "%s %s" % (self.state, self.headline)
+        return "%s %s: %s" % (self.state, self.headline, self.path)
 
 def walknode(node, path):
     for child in node.children:
         log.debug("walknode: %s", child)
         s = str(child)
-        if s.find("read about") > 0:
-            import pdb; pdb.set_trace()
         if child.todo:
             t = ToDo(child.heading, child.scheduled, path, state=child.todo)
-            todos.append(t)
+            if t.sig in todos:
+                log.warning("found a duplicate: %s", t)
+                log.warning("    original: %s", todos[t.sig])
+            else:
+                todos[t.sig] = t
             log.debug("captured: %s", t)
         walknode(child, path)
 
@@ -43,7 +50,7 @@ def visit(root, files):
             path = os.path.join(root, f)
             with open(path, "r") as orgfile:
                 log.debug("visit: opening %s", path)
-                orgbuf = orgparse.loads(orgfile.read())
+                orgbuf = orgparse.loads(orgfile.read(), env=env)
                 for node in orgbuf[1:]:
                     log.debug("visit: HEADING: %s", node.heading)
                     walknode(node, path)
@@ -94,7 +101,7 @@ def main():
     todos_inprogress = []
     todos_done = []
 
-    for todo in todos:
+    for sig, todo in todos.items():
         log.debug("looping on todo: %s", todo)
         if todo.state == "TODO":
             todos_undone.append(todo)
@@ -115,9 +122,9 @@ def main():
     for todo in todos_inprogress:
         log.info("    %s %s", todo.state, todo.headline)
 
-    log.info("Done items:")
-    for todo in todos_done:
-        log.info("    %s %s", todo.state, todo.headline)
+    #log.info("Done items:")
+    #for todo in todos_done:
+    #    log.info("    %s %s", todo.state, todo.headline)
 
 if __name__ == '__main__':
     try:
