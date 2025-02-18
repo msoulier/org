@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
+import argparse
 import orgparse
 import sys
 import os.path
 import os
 import logging
+import datetime
 
 logging.basicConfig()
 log = logging.getLogger('org')
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 todos = []
 
@@ -25,6 +27,9 @@ class ToDo(object):
 def walknode(node, path):
     for child in node.children:
         log.debug("walknode: %s", child)
+        s = str(child)
+        if s.find("read about") > 0:
+            import pdb; pdb.set_trace()
         if child.todo:
             t = ToDo(child.heading, child.scheduled, path, state=child.todo)
             todos.append(t)
@@ -35,8 +40,6 @@ def visit(root, files):
     log.debug("visit: found files: %s", files)
     for f in files:
         if f.endswith(".org"):
-            #if f == "tasks.org":
-            #    import pdb; pdb.set_trace()
             path = os.path.join(root, f)
             with open(path, "r") as orgfile:
                 log.debug("visit: opening %s", path)
@@ -50,9 +53,32 @@ def walk(rootdir):
     for root, dirs, files in os.walk(rootdir):
         visit(root, files)
 
+def options():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        dest="debug",
+        help="Verbose logging")
+    parser.add_argument(
+        "root",
+        help="The root of the org filesystem")
+    args = parser.parse_args()
+
+    if not args.root:
+        parser.print_help()
+        sys.exit(1)
+
+    if args.debug:
+        log.setLevel(logging.DEBUG)
+
+    return args
+
 def main():
     if len(sys.argv) > 1:
-        rootdir = sys.argv[1]
+        args = options()
+        rootdir = args.root
         if os.path.isdir(rootdir):
             walk(rootdir)
         else:
@@ -80,6 +106,18 @@ def main():
     log.info("todo list size: %d", len(todos_undone))
     log.info("in-progress list size: %d", len(todos_inprogress))
     log.info("done list size: %d", len(todos_done))
+
+    log.info("Undone items:")
+    for todo in todos_undone:
+        log.info("    %s %s", todo.state, todo.headline)
+
+    log.info("In-progress items:")
+    for todo in todos_inprogress:
+        log.info("    %s %s", todo.state, todo.headline)
+
+    log.info("Done items:")
+    for todo in todos_done:
+        log.info("    %s %s", todo.state, todo.headline)
 
 if __name__ == '__main__':
     try:
